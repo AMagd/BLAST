@@ -48,6 +48,10 @@ defaults:
   kl: {free: 0.0, forward: False, balance: 0.8, free_avg: True}
   model_opt: {opt: adam, lr: 1e-4, eps: 1e-5, clip: 100, wd: 1e-6}
 
+  # BLAST Parameters:
+  add_recon_loss: True # add/remove the reconstruction loss
+  # kl.balance: 0.8 # stop gradient to the posterior in the KL loss
+
   # Actor Critic
   actor: {layers: 4, units: 400, act: elu, norm: none, dist: auto, min_std: 0.1}
   critic: {layers: 4, units: 400, act: elu, norm: none, dist: mse}
@@ -166,3 +170,13 @@ debug:
   train_steps: 1
   replay: {minlen: 10, maxlen: 30}
   dataset: {batch: 10, length: 10}
+
+BLAST_full:
+  add_recon_loss: False
+  kl.balance: 1
+
+BLAST_recon:
+  add_recon_loss: False
+
+BLAST_SG:
+  kl.balance: 1

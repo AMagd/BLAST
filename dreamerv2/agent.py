@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import mixed_precision as prec
+from pudb import set_trace
 
 import common
 import expl
@@ -94,6 +95,7 @@ class WorldModel(common.Module):
     for name in config.grad_heads:
       assert name in self.heads, name
     self.model_opt = common.Optimizer('model', **config.model_opt)
+    self.add_recon_loss = config.add_recon_loss
 
   def train(self, data, state=None):
     with tf.GradientTape() as model_tape:
@@ -112,15 +114,20 @@ class WorldModel(common.Module):
     likes = {}
     losses = {'kl': kl_loss}
     feat = self.rssm.get_feat(post)
-    for name, head in self.heads.items():
-      grad_head = (name in self.config.grad_heads)
-      inp = feat if grad_head else tf.stop_gradient(feat)
-      out = head(inp)
+    for name, head in self.heads.items(): # self.heads is defined above as: self.heads = {'decoder': Decoder Network Object, 'Reward': Reward Network Object} | SELF NOTES
+      grad_head = (name in self.config.grad_heads) # Boolean variable checking if an item in self.heads is also in config.grad_heads | SELF NOTES
+      inp = feat if grad_head else tf.stop_gradient(feat) # if the above variable if false, then stop gradient from going to that head, since that head should not actually be added to the model | SELF NOTES
+      out = head(inp) # head will be the Decoder network head, and in the next loop it will be the Reward network head | SELF NOTES
       dists = out if isinstance(out, dict) else {name: out}
       for key, dist in dists.items():
-        like = tf.cast(dist.log_prob(data[key]), tf.float32)
+        like = dist.log_prob(tf.cast(data[key], tf.float32)) # computes log-likelyhood between output and input (for the decoder it will be the reconstruction loss)  | SELF NOTES
         likes[key] = like
-        losses[key] = -like.mean()
+        if name=='decoder' and (not self.add_recon_loss): # to remove the reconstruction loss
+          losses[key] = -like.mean()*0
+        else:
+          losses[key] = -like.mean()
+
+
     model_loss = sum(
         self.config.loss_scales.get(k, 1.0) * v for k, v in losses.items())
     outs = dict(

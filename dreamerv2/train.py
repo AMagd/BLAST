@@ -6,6 +6,7 @@ import pathlib
 import re
 import sys
 import warnings
+from pudb import set_trace
 
 try:
   import rich.traceback
@@ -33,7 +34,7 @@ def main():
       pathlib.Path(sys.argv[0]).parent / 'configs.yaml').read_text())
   parsed, remaining = common.Flags(configs=['defaults']).parse(known_only=True)
   config = common.Config(configs['defaults'])
-  for name in parsed.configs:
+  for name in configs.keys():
     config = config.update(configs[name])
   config = common.Flags(config).parse(remaining)
 
