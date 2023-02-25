@@ -48,8 +48,10 @@ defaults:
   kl: {free: 0.0, forward: False, balance: 0.8, free_avg: True}
   model_opt: {opt: adam, lr: 1e-4, eps: 1e-5, clip: 100, wd: 1e-6}
 
-  # BLAST Parameters:
+  # BLAST Parameters - these are the values to achieve a normal DreamerV2 model:
   add_recon_loss: True # add/remove the reconstruction loss
+  kl.balance: 0.8
+  encoder.norm: none
   # kl.balance: 0.8 # stop gradient to the posterior in the KL loss
 
   # Actor Critic
@@ -174,9 +176,17 @@ debug:
 BLAST_full:
   add_recon_loss: False
   kl.balance: 1
+  encoder.norm: batchnorm
 
 BLAST_recon:
   add_recon_loss: False
 
 BLAST_SG:
   kl.balance: 1
+
+# BLAST_EMA:
+
+BLAST_BN:
+  encoder.norm: batchnorm
+
+# BLAST_AR:

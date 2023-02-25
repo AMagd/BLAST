@@ -96,7 +96,8 @@ class Optimizer(tf.Module):
 
     # Find variables.
     modules = modules if hasattr(modules, '__len__') else (modules,)
-    varibs = tf.nest.flatten([module.variables for module in modules])
+    # varibs = tf.nest.flatten([module.variables for module in modules])
+    varibs = tf.nest.flatten([module.trainable_variables for module in modules]) # Optimize trainable variables ONLY. Non-trainable variables will result in gradients of None otherwise (useful for batchnormalization since some of its variables are non-trainable)
     count = sum(np.prod(x.shape) for x in varibs)
     if self._once:
       print(f'Found {count} {self._name} parameters.')
@@ -119,6 +120,8 @@ class Optimizer(tf.Module):
     # Distributed sync.
     context = tf.distribute.get_replica_context()
     if context:
+      from pudb.remote import set_trace
+      # set_trace(term_size=(26, 119))
       grads = context.all_reduce('mean', grads)
 
     # Gradient clipping.

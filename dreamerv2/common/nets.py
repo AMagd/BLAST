@@ -396,6 +396,8 @@ class NormLayer(common.Module):
       self._layer = None
     elif name == 'layer':
       self._layer = tfkl.LayerNormalization()
+    elif name == 'batchnorm':
+      self._layer = tfkl.BatchNormalization()
     else:
       raise NotImplementedError(name)
 

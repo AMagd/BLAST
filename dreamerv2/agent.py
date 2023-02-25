@@ -87,6 +87,7 @@ class WorldModel(common.Module):
     self.tfstep = tfstep
     self.rssm = common.EnsembleRSSM(**config.rssm)
     self.encoder = common.Encoder(shapes, **config.encoder)
+    # self.target_encoder =
     self.heads = {}
     self.heads['decoder'] = common.Decoder(shapes, **config.decoder)
     self.heads['reward'] = common.MLP([], **config.reward_head)
@@ -98,9 +99,13 @@ class WorldModel(common.Module):
     self.add_recon_loss = config.add_recon_loss
 
   def train(self, data, state=None):
-    with tf.GradientTape() as model_tape:
+    with tf.GradientTape(persistent=True) as model_tape:
       model_loss, state, outputs, metrics = self.loss(data, state)
     modules = [self.encoder, self.rssm, *self.heads.values()]
+    # if self.config.encoder.norm == "batchnorm":
+    # for i in range(len(modules)):
+    #   # if isinstance(modules[i], common.nets.Encoder):
+    #     modules[i].variables = tuple(layer for layer in modules[i].variables if layer.trainable==True) # remove moving_mean and moving_variance tensors in the batchnormalization layers since they shouldn't be trained/optimized
     metrics.update(self.model_opt(model_tape, model_loss, modules))
     return state, outputs, metrics
 
@@ -120,7 +125,7 @@ class WorldModel(common.Module):
       out = head(inp) # head will be the Decoder network head, and in the next loop it will be the Reward network head | SELF NOTES
       dists = out if isinstance(out, dict) else {name: out}
       for key, dist in dists.items():
-        like = dist.log_prob(tf.cast(data[key], tf.float32)) # computes log-likelyhood between output and input (for the decoder it will be the reconstruction loss)  | SELF NOTES
+        like = tf.cast(dist.log_prob(data[key]), tf.float32) # computes log-likelyhood between output and input (for the decoder it will be the reconstruction loss)  | SELF NOTES
         likes[key] = like
         if name=='decoder' and (not self.add_recon_loss): # to remove the reconstruction loss
           losses[key] = -like.mean()*0
