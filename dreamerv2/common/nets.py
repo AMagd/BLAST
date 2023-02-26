@@ -13,7 +13,7 @@ class EnsembleRSSM(common.Module):
 
   def __init__(
       self, ensemble=5, stoch=30, deter=200, hidden=200, discrete=False,
-      act='elu', norm='none', std_act='softplus', min_std=0.1):
+      act='elu', norm='none', obs_out_norm='none', std_act='softplus', min_std=0.1):
     super().__init__()
     self._ensemble = ensemble
     self._stoch = stoch
@@ -22,6 +22,8 @@ class EnsembleRSSM(common.Module):
     self._discrete = discrete
     self._act = get_act(act)
     self._norm = norm
+    self._obs_out_norm = obs_out_norm
+    print(f'OBS_OUT_NORM = {obs_out_norm}')
     self._std_act = std_act
     self._min_std = min_std
     self._cell = GRUCell(self._deter, norm=True)
@@ -96,7 +98,7 @@ class EnsembleRSSM(common.Module):
     prior = self.img_step(prev_state, prev_action, sample)
     x = tf.concat([prior['deter'], embed], -1)
     x = self.get('obs_out', tfkl.Dense, self._hidden)(x)
-    x = self.get('obs_out_norm', NormLayer, self._norm)(x)
+    x = self.get('obs_out_norm', NormLayer, self.obs_out_norm)(x)
     x = self._act(x)
     stats = self._suff_stats_layer('obs_dist', x)
     dist = self.get_dist(stats)
@@ -185,6 +187,58 @@ class Encoder(common.Module):
   def __init__(
       self, shapes, cnn_keys=r'.*', mlp_keys=r'.*', act='elu', norm='none',
       cnn_depth=48, cnn_kernels=(4, 4, 4, 4), mlp_layers=[400, 400, 400, 400]):
+    self.shapes = shapes
+    self.cnn_keys = [
+        k for k, v in shapes.items() if re.match(cnn_keys, k) and len(v) == 3]
+    self.mlp_keys = [
+        k for k, v in shapes.items() if re.match(mlp_keys, k) and len(v) == 1]
+    print('Encoder CNN inputs:', list(self.cnn_keys))
+    print('Encoder MLP inputs:', list(self.mlp_keys))
+    self._act = get_act(act)
+    self._norm = norm
+    self._cnn_depth = cnn_depth
+    self._cnn_kernels = cnn_kernels
+    self._mlp_layers = mlp_layers
+
+  @tf.function
+  def __call__(self, data):
+    key, shape = list(self.shapes.items())[0]
+    batch_dims = data[key].shape[:-len(shape)]
+    data = {
+        k: tf.reshape(v, (-1,) + tuple(v.shape)[len(batch_dims):])
+        for k, v in data.items()}
+    outputs = []
+    if self.cnn_keys:
+      outputs.append(self._cnn({k: data[k] for k in self.cnn_keys}))
+    if self.mlp_keys:
+      outputs.append(self._mlp({k: data[k] for k in self.mlp_keys}))
+    output = tf.concat(outputs, -1)
+    return output.reshape(batch_dims + output.shape[1:])
+
+  def _cnn(self, data):
+    x = tf.concat(list(data.values()), -1)
+    x = x.astype(prec.global_policy().compute_dtype)
+    for i, kernel in enumerate(self._cnn_kernels):
+      depth = 2 ** i * self._cnn_depth
+      x = self.get(f'conv{i}', tfkl.Conv2D, depth, kernel, 2)(x)
+      x = self.get(f'convnorm{i}', NormLayer, self._norm)(x)
+      x = self._act(x)
+    return x.reshape(tuple(x.shape[:-3]) + (-1,))
+
+  def _mlp(self, data):
+    x = tf.concat(list(data.values()), -1)
+    x = x.astype(prec.global_policy().compute_dtype)
+    for i, width in enumerate(self._mlp_layers):
+      x = self.get(f'dense{i}', tfkl.Dense, width)(x)
+      x = self.get(f'densenorm{i}', NormLayer, self._norm)(x)
+      x = self._act(x)
+    return x
+
+class AutoRegressive(common.Module):
+
+  def __init__(
+      self, prior, h, mlp_keys=r'.*', act='elu', norm='none',
+      mlp_layers=[400, 400, 400, 400]):
     self.shapes = shapes
     self.cnn_keys = [
         k for k, v in shapes.items() if re.match(cnn_keys, k) and len(v) == 3]

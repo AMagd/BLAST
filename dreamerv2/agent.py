@@ -87,7 +87,9 @@ class WorldModel(common.Module):
     self.tfstep = tfstep
     self.rssm = common.EnsembleRSSM(**config.rssm)
     self.encoder = common.Encoder(shapes, **config.encoder)
-    # self.target_encoder =
+    if config.ema >= 0:
+      self.target_encoder = common.Encoder(shapes, **config.encoder)
+      self.target_encoder.align_target_network(online_network=self.encoder, ema=0) # this will copy all the initial parameters of the online encoder to the target encoder
     self.heads = {}
     self.heads['decoder'] = common.Decoder(shapes, **config.decoder)
     self.heads['reward'] = common.MLP([], **config.reward_head)
@@ -99,22 +101,33 @@ class WorldModel(common.Module):
     self.add_recon_loss = config.add_recon_loss
 
   def train(self, data, state=None):
-    with tf.GradientTape(persistent=True) as model_tape:
-      model_loss, state, outputs, metrics = self.loss(data, state)
+    # Target Encoder
+    target_post = None
+    if self.config.ema >= 0:
+      data = self.preprocess(data)
+      target_embed = self.target_encoder(data)
+      target_post, _ = self.rssm.observe(
+          target_embed, data['action'], data['is_first'], state)
+          
+    with tf.GradientTape() as model_tape:
+      model_loss, state, outputs, metrics = self.loss(data, state, target_post)
     modules = [self.encoder, self.rssm, *self.heads.values()]
-    # if self.config.encoder.norm == "batchnorm":
-    # for i in range(len(modules)):
-    #   # if isinstance(modules[i], common.nets.Encoder):
-    #     modules[i].variables = tuple(layer for layer in modules[i].variables if layer.trainable==True) # remove moving_mean and moving_variance tensors in the batchnormalization layers since they shouldn't be trained/optimized
     metrics.update(self.model_opt(model_tape, model_loss, modules))
+    if self.config.ema >= 0:
+      self.target_encoder.align_target_network(online_network=self.encoder, ema=self.config.ema)
     return state, outputs, metrics
 
-  def loss(self, data, state=None):
-    data = self.preprocess(data)
+  def loss(self, data, state=None, target_post=None):
+    if self.config.ema < 0:
+      data = self.preprocess(data)
     embed = self.encoder(data)
     post, prior = self.rssm.observe(
         embed, data['action'], data['is_first'], state)
-    kl_loss, kl_value = self.rssm.kl_loss(post, prior, **self.config.kl)
+    
+    if self.config.ema < 0:
+      kl_loss, kl_value = self.rssm.kl_loss(post, prior, **self.config.kl) # in case the model does not have a target encoder
+    else:
+      kl_loss, kl_value = self.rssm.kl_loss(target_post, prior, **self.config.kl) # in case the model does have a target encoder
     assert len(kl_loss.shape) == 0
     likes = {}
     losses = {'kl': kl_loss}
