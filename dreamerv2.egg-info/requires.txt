@@ -1,0 +1,7 @@
+gym[atari]
+atari_py
+crafter
+dm_control
+ruamel.yaml
+tensorflow
+tensorflow_probability

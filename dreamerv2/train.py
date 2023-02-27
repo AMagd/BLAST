@@ -81,6 +81,12 @@ def main():
       env = common.DMC(
           task, config.action_repeat, config.render_size, config.dmc_camera)
       env = common.NormalizeAction(env)
+    elif suite == 'nat': # DMC with background
+      bg_path = config.bg_path_train if mode == 'train' else config.bg_path_test
+      env = common.NAT(
+          task, config.action_repeat, config.image_size,
+          bg_path=bg_path, random_bg=config.random_bg, max_videos=config.max_videos)
+      env = common.NormalizeAction(env)
     elif suite == 'atari':
       env = common.Atari(
           task, config.action_repeat, config.render_size,

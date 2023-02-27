@@ -29,6 +29,12 @@ defaults:
   precision: 16
   jit: True
 
+  # Natural Background
+  bg_path_train: '/home/user/data/Ahmad/Ahmad/BLAST/examples/kinetics400/videos/train'
+  bg_path_test: '/home/user/data/Ahmad/Ahmad/BLAST/examples/kinetics400/videos/test'
+  random_bg: False
+  max_videos: 100
+
   # Agent
   clip_rewards: tanh
   expl_behavior: greedy
@@ -189,7 +195,7 @@ BLAST_full:
   encoder.norm: batchnorm
   rssm.obs_out_norm: batchnorm
   ema: 0.99
-  rssm.ar_steps: ${rssm.stoch}
+  # rssm.ar_steps: ${rssm.stoch}
 
 BLAST_recon:
   add_recon_loss: False
@@ -205,4 +211,4 @@ BLAST_BN:
   rssm.obs_out_norm: batchnorm
 
 BLAST_AR:
-  rssm.ar_steps: 32
+  # rssm.ar_steps: 32

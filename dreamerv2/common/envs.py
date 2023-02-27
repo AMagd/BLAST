@@ -69,6 +69,88 @@ class GymWrapper:
     obs['is_terminal'] = False
     return obs
 
+from gym_minigrid.wrappers import RGBImgObsWrapper
+import numpy as np
+
+# MiniGrid Wrappers
+
+class SmallerAgentWrapper(RGBImgObsWrapper):
+    
+    def __init__(self, env):
+        super().__init__(env)
+        self.smaller_agent = np.array([[0,   0,   0,   0,   0,   0],
+                                       [0,  56,   0,   0,   0,   0],
+                                       [0, 226, 255, 141,   0,   0],
+                                       [0, 226, 255, 141,   0,   0],
+                                       [0,  56,   0,   0,   0,   0],
+                                       [0,   0,   0,   0,   0,   0]], np.uint8)
+
+    def observation(self, obs):
+        im = super().observation(obs)
+        dir = obs['direction']
+
+        # overlay
+        mask_agent = np.logical_and(im['image'][...,0] > 0, im['image'][...,2] == 0) # mask the agent by checking if the cell has some red values and zero blue values (it might have green as well in case the agent is on top of the goal)
+        ind = np.where(mask_agent) # indices of agent pixels
+        agent_grid_x = (ind[0].min(), ind[0].max())
+        agent_grid_y = (ind[1].min(), ind[1].max())
+        im['image'][agent_grid_x[0]:agent_grid_x[1]+1, agent_grid_y[0]:agent_grid_y[1]+1, 0] = np.rot90(self.smaller_agent, k=-dir) # rotate the slammer_agent array
+        if mask_agent[36, 36] == True:
+          im['image'][32:40, 32:40, 1] = 255 # rotate the slammer_agent array
+          im['image'][agent_grid_x[0]:agent_grid_x[1]+1, agent_grid_y[0]:agent_grid_y[1]+1, 1]= 255 - np.rot90(self.smaller_agent, k=-dir) # rotate the slammer_agent array
+
+        return im
+
+    def reset(self, **kwargs):
+        """Resets the environment, returning a modified observation using :meth:`self.observation`."""
+        obs = self.env.reset(**kwargs)
+        return self.observation(obs)
+
+class ColorDirectionWrapper(RGBImgObsWrapper):
+    
+    def __init__(self, env):
+        super().__init__(env)
+        self.dir2color = np.array([[160,  52, 114],
+                                   [250, 210,   1],
+                                   [ 59, 131, 189],
+                                   [195, 195, 195]], np.uint8) # these values were generated from a random color generator https://randomwordgenerator.com/color.php
+
+    def observation(self, obs):
+        im = super().observation(obs)
+        dir = obs['direction']
+
+        # overlay
+        mask = np.logical_and.reduce((im['image'][...,0] > 0, im['image'][...,2] == 0)) # mask the agent
+
+        im['image'][mask] = (self.dir2color[dir]*(np.repeat(np.expand_dims(im['image'][mask,0]/255, 1), 3, axis=-1))).astype(np.uint8)
+        return im
+
+    def reset(self, **kwargs):
+        """Resets the environment, returning a modified observation using :meth:`self.observation`."""
+        obs = self.env.reset(**kwargs)
+        return self.observation(obs)
+
+class BackgroundWrapper(RGBImgObsWrapper):
+    
+    def __init__(self, env, _bg_source):
+        super().__init__(env)
+        self._bg_source = _bg_source
+
+    def observation(self, obs):
+        im = super().observation(obs)
+        # overlay
+        mask = np.sum(im['image'], axis=-1) == 0 # mask the background
+        bg = self._bg_source.get_image()
+        im['image'][mask] = bg[mask]
+        return im
+
+    def reset(self, **kwargs):
+        """Resets the environment, returning a modified observation using :meth:`self.observation`."""
+        obs = self.env.reset(**kwargs)
+        self._bg_source.reset()
+        return self.observation(obs)
+
+# Other Envs:
 
 class DMC:
 

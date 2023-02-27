@@ -1,0 +1,2 @@
+[console_scripts]
+dreamerv2 = dreamerv2.train:main
