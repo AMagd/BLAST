@@ -23,7 +23,6 @@ class EnsembleRSSM(common.Module):
     self._act = get_act(act)
     self._norm = norm
     self._obs_out_norm = obs_out_norm
-    print(f'OBS_OUT_NORM = {obs_out_norm}')
     self._std_act = std_act
     self._min_std = min_std
     self._cell = GRUCell(self._deter, norm=True)
@@ -98,7 +97,7 @@ class EnsembleRSSM(common.Module):
     prior = self.img_step(prev_state, prev_action, sample)
     x = tf.concat([prior['deter'], embed], -1)
     x = self.get('obs_out', tfkl.Dense, self._hidden)(x)
-    x = self.get('obs_out_norm', NormLayer, self.obs_out_norm)(x)
+    x = self.get('obs_out_norm', NormLayer, self._obs_out_norm)(x)
     x = self._act(x)
     stats = self._suff_stats_layer('obs_dist', x)
     dist = self.get_dist(stats)
@@ -234,57 +233,57 @@ class Encoder(common.Module):
       x = self._act(x)
     return x
 
-class AutoRegressive(common.Module):
+# class AutoRegressive(common.Module):
 
-  def __init__(
-      self, prior, h, mlp_keys=r'.*', act='elu', norm='none',
-      mlp_layers=[400, 400, 400, 400]):
-    self.shapes = shapes
-    self.cnn_keys = [
-        k for k, v in shapes.items() if re.match(cnn_keys, k) and len(v) == 3]
-    self.mlp_keys = [
-        k for k, v in shapes.items() if re.match(mlp_keys, k) and len(v) == 1]
-    print('Encoder CNN inputs:', list(self.cnn_keys))
-    print('Encoder MLP inputs:', list(self.mlp_keys))
-    self._act = get_act(act)
-    self._norm = norm
-    self._cnn_depth = cnn_depth
-    self._cnn_kernels = cnn_kernels
-    self._mlp_layers = mlp_layers
+#   def __init__(
+#       self, prior, h, mlp_keys=r'.*', act='elu', norm='none',
+#       mlp_layers=[400, 400, 400, 400]):
+#     self.shapes = shapes
+#     self.cnn_keys = [
+#         k for k, v in shapes.items() if re.match(cnn_keys, k) and len(v) == 3]
+#     self.mlp_keys = [
+#         k for k, v in shapes.items() if re.match(mlp_keys, k) and len(v) == 1]
+#     print('Encoder CNN inputs:', list(self.cnn_keys))
+#     print('Encoder MLP inputs:', list(self.mlp_keys))
+#     self._act = get_act(act)
+#     self._norm = norm
+#     self._cnn_depth = cnn_depth
+#     self._cnn_kernels = cnn_kernels
+#     self._mlp_layers = mlp_layers
 
-  @tf.function
-  def __call__(self, data):
-    key, shape = list(self.shapes.items())[0]
-    batch_dims = data[key].shape[:-len(shape)]
-    data = {
-        k: tf.reshape(v, (-1,) + tuple(v.shape)[len(batch_dims):])
-        for k, v in data.items()}
-    outputs = []
-    if self.cnn_keys:
-      outputs.append(self._cnn({k: data[k] for k in self.cnn_keys}))
-    if self.mlp_keys:
-      outputs.append(self._mlp({k: data[k] for k in self.mlp_keys}))
-    output = tf.concat(outputs, -1)
-    return output.reshape(batch_dims + output.shape[1:])
+#   @tf.function
+#   def __call__(self, data):
+#     key, shape = list(self.shapes.items())[0]
+#     batch_dims = data[key].shape[:-len(shape)]
+#     data = {
+#         k: tf.reshape(v, (-1,) + tuple(v.shape)[len(batch_dims):])
+#         for k, v in data.items()}
+#     outputs = []
+#     if self.cnn_keys:
+#       outputs.append(self._cnn({k: data[k] for k in self.cnn_keys}))
+#     if self.mlp_keys:
+#       outputs.append(self._mlp({k: data[k] for k in self.mlp_keys}))
+#     output = tf.concat(outputs, -1)
+#     return output.reshape(batch_dims + output.shape[1:])
 
-  def _cnn(self, data):
-    x = tf.concat(list(data.values()), -1)
-    x = x.astype(prec.global_policy().compute_dtype)
-    for i, kernel in enumerate(self._cnn_kernels):
-      depth = 2 ** i * self._cnn_depth
-      x = self.get(f'conv{i}', tfkl.Conv2D, depth, kernel, 2)(x)
-      x = self.get(f'convnorm{i}', NormLayer, self._norm)(x)
-      x = self._act(x)
-    return x.reshape(tuple(x.shape[:-3]) + (-1,))
+#   def _cnn(self, data):
+#     x = tf.concat(list(data.values()), -1)
+#     x = x.astype(prec.global_policy().compute_dtype)
+#     for i, kernel in enumerate(self._cnn_kernels):
+#       depth = 2 ** i * self._cnn_depth
+#       x = self.get(f'conv{i}', tfkl.Conv2D, depth, kernel, 2)(x)
+#       x = self.get(f'convnorm{i}', NormLayer, self._norm)(x)
+#       x = self._act(x)
+#     return x.reshape(tuple(x.shape[:-3]) + (-1,))
 
-  def _mlp(self, data):
-    x = tf.concat(list(data.values()), -1)
-    x = x.astype(prec.global_policy().compute_dtype)
-    for i, width in enumerate(self._mlp_layers):
-      x = self.get(f'dense{i}', tfkl.Dense, width)(x)
-      x = self.get(f'densenorm{i}', NormLayer, self._norm)(x)
-      x = self._act(x)
-    return x
+#   def _mlp(self, data):
+#     x = tf.concat(list(data.values()), -1)
+#     x = x.astype(prec.global_policy().compute_dtype)
+#     for i, width in enumerate(self._mlp_layers):
+#       x = self.get(f'dense{i}', tfkl.Dense, width)(x)
+#       x = self.get(f'densenorm{i}', NormLayer, self._norm)(x)
+#       x = self._act(x)
+#     return x
 
 
 class Decoder(common.Module):
@@ -472,3 +471,85 @@ def get_act(name):
     return getattr(tf, name)
   else:
     raise NotImplementedError(name)
+
+# Auto-Regressive Part
+
+# class BaseAttention(tf.keras.layers.Layer):
+#   def __init__(self, **kwargs):
+#     super().__init__()
+#     self.mha = tf.keras.layers.MultiHeadAttention(**kwargs)
+#     self.layernorm = tf.keras.layers.LayerNormalization()
+#     self.add = tf.keras.layers.Add()
+
+# class CausalSelfAttention(BaseAttention):
+#   def call(self, x):
+#     attn_output = self.mha(
+#         query=x,
+#         value=x,
+#         key=x,
+#         use_causal_mask = True)
+#     x = self.add([x, attn_output])
+#     x = self.layernorm(x)
+#     return x
+  
+# class CrossAttention(BaseAttention):
+#   def call(self, x, context):
+#     attn_output, attn_scores = self.mha(
+#         query=x,
+#         key=context,
+#         value=context,
+#         return_attention_scores=True)
+
+#     # Cache the attention scores for plotting later.
+#     self.last_attn_scores = attn_scores
+
+#     x = self.add([x, attn_output])
+#     x = self.layernorm(x)
+
+#     return x
+
+# class FeedForward(tf.keras.layers.Layer):
+#   def __init__(self, d_model, dff, dropout_rate=0.1):
+#     super().__init__()
+#     self.seq = tf.keras.Sequential([
+#       tf.keras.layers.Dense(dff, activation='relu'),
+#       tf.keras.layers.Dense(d_model),
+#       tf.keras.layers.Dropout(dropout_rate)
+#     ])
+#     self.add = tf.keras.layers.Add()
+#     self.layer_norm = tf.keras.layers.LayerNormalization()
+
+#   def call(self, x):
+#     x = self.add([x, self.seq(x)])
+#     x = self.layer_norm(x) 
+#     return x
+
+# class AutoRegressiveDecoderLayer(tf.keras.layers.Layer):
+#   def __init__(self,
+#                *,
+#                d_model,
+#                num_heads,
+#                dff,
+#                dropout_rate=0.1):
+#     super(AutoRegressiveDecoderLayer, self).__init__()
+
+#     self.causal_self_attention = CausalSelfAttention(
+#         num_heads=num_heads,
+#         key_dim=d_model,
+#         dropout=dropout_rate)
+
+#     self.cross_attention = CrossAttention(
+#         num_heads=num_heads,
+#         key_dim=d_model,
+#         dropout=dropout_rate)
+
+#     self.ffn = FeedForward(d_model, dff)
+
+#     tf.keras.layers.Dense(2)
+
+#   def call(self, x, context):
+#     x1 = self.causal_self_attention(x=x)
+#     x = self.cross_attention(x=x, context=context)
+
+#     x = self.ffn(x)  # Shape `(batch_size, seq_len, d_model)`.
+#     return x

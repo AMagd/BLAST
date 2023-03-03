@@ -57,6 +57,8 @@ def train(env, config, outputs=None):
   def per_episode(ep):
     length = len(ep['reward']) - 1
     score = float(ep['reward'].astype(np.float64).sum())
+    if score!=0:
+      print(f'score:{score}')
     print(f'Episode has {length} steps and return {score:.1f}.')
     logger.scalar('return', score)
     logger.scalar('length', length)

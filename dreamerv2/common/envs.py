@@ -7,6 +7,7 @@ import traceback
 import cloudpickle
 import gym
 import numpy as np
+from math import ceil
 
 
 class GymWrapper:
@@ -73,6 +74,26 @@ from gym_minigrid.wrappers import RGBImgObsWrapper
 import numpy as np
 
 # MiniGrid Wrappers
+
+class MiniGridMDPWrapper(gym.core.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        # self.cumulated_return = 0
+        self.horizon = 100 # fixed horizon in BLAST
+        self.current_step = 0
+    
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self.current_step += 1
+
+        if self.current_step < self.horizon:
+            done = False
+        else:
+            done = True
+            self.current_step = 0
+
+        return obs, ceil(reward), done, info # rounding the reward up because normally it gives a fraction of 1 when the agent reaches the goal
 
 class SmallerAgentWrapper(RGBImgObsWrapper):
     

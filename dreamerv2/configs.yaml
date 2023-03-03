@@ -43,9 +43,10 @@ defaults:
   eval_state_mean: False
 
   # World Model
-  grad_heads: [decoder, reward, discount]
+  # grad_heads: [decoder, reward, discount]
+  grad_heads: [decoder, reward]
   pred_discount: True
-  rssm: {ensemble: 1, hidden: 1024, deter: 1024, stoch: 32, discrete: 32, act: elu, norm: none, obs_out_norm: none, std_act: sigmoid2, min_std: 0.1, ar_steps: 0}
+  rssm: {ensemble: 1, hidden: 1024, deter: 1024, stoch: 32, discrete: 32, act: elu, norm: none, obs_out_norm: none, std_act: sigmoid2, min_std: 0.1}
   encoder: {mlp_keys: '.*', cnn_keys: '.*', act: elu, norm: none, cnn_depth: 48, cnn_kernels: [4, 4, 4, 4], mlp_layers: [400, 400, 400, 400]}
   decoder: {mlp_keys: '.*', cnn_keys: '.*', act: elu, norm: none, cnn_depth: 48, cnn_kernels: [5, 5, 6, 6], mlp_layers: [400, 400, 400, 400]}
   reward_head: {layers: 4, units: 400, act: elu, norm: none, dist: mse}
@@ -56,7 +57,7 @@ defaults:
 
   # BLAST Parameters - these are the values to achieve a normal DreamerV2 model:
   add_recon_loss: True # add/remove the reconstruction loss
-  kl.balance: 1
+  kl.balance: 1.0
   encoder.norm: none
   ema: -1.0
   # kl.balance: 0.8 # stop gradient to the posterior in the KL loss
@@ -147,6 +148,14 @@ dmc_vision:
   critic_opt.lr: 8e-5
   actor_ent: 1e-4
   kl.free: 1.0
+  train_every: 5
+  steps: 1e6
+  discount: 0.99
+  rssm.discrete: 64
+  actor_grad: dynamics
+  loss_scales.kl: 1.0
+  loss_scales.reward: 1.0
+  kl.balance: 0.8
 
 dmc_proprio:
 
@@ -191,7 +200,7 @@ debug:
 
 BLAST_full:
   add_recon_loss: False
-  kl.balance: 1
+  kl.balance: 1.0
   encoder.norm: batchnorm
   rssm.obs_out_norm: batchnorm
   ema: 0.99
@@ -201,12 +210,18 @@ BLAST_recon:
   add_recon_loss: False
 
 BLAST_SG:
-  kl.balance: 1
+  add_recon_loss: False
+  kl.balance: 1.0
 
 BLAST_EMA:
+  add_recon_loss: False
+  kl.balance: 1.0
   ema: 0.99
 
 BLAST_BN:
+  add_recon_loss: False
+  kl.balance: 1.0
+  ema: 0.99
   encoder.norm: batchnorm
   rssm.obs_out_norm: batchnorm
 
