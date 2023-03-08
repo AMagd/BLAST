@@ -9,8 +9,10 @@ import os
 
 def main():
     ###################### PARAMETERS TO CHANGE ######################
-    model= 'DreamerV2' # [DreamerV2, recon, SG, EMA, BN, AR, BLAST]
+    model= 'SG' # [DreamerV2, recon, SG, EMA, BN, AR, BLAST]
     env_type = "smaller_agent" # [unmodified, video, random_frames, smaller_agent, color_direction]
+    print(f'{" Model = " + model + " " :#^100}')
+    print(f'{" ENV = " + env_type + " " :#^100}')
     ##################################################################
 
     # 1: normal minigrid env, 2: minigrid env with rewards 0 and 1, 3: minigrid env with rewards -1, 0 and 1
@@ -31,7 +33,7 @@ def main():
         'clip_rewards': 'tanh', # reward_clamp
         'kl.balance': 0.8,
         'log_every': 1e3,
-        'actor_ent': 3e-3
+        'actor_ent': 3e-3,
     }).parse_flags()
 
     if model == 'recon':
@@ -62,7 +64,14 @@ def main():
         }).parse_flags()
     
     elif model == 'AR':
-        pass
+        config = config.update({
+            'add_recon_loss': False,
+            'kl.balance': 1,
+            'ema': 0.99,
+            'encoder.norm': 'batchnorm',
+            'rssm.obs_out_norm': 'batchnorm',
+            'rssm.ar_steps': 3
+        }).parse_flags()
     
     else:
         pass

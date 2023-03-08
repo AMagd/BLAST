@@ -99,6 +99,7 @@ class WorldModel(common.Module):
       assert name in self.heads, name
     self.model_opt = common.Optimizer('model', **config.model_opt)
     self.add_recon_loss = config.add_recon_loss
+    # self.autoreg_RNN = 
 
   def train(self, data, state=None):
     # Target Encoder
@@ -121,8 +122,14 @@ class WorldModel(common.Module):
     if self.config.ema < 0:
       data = self.preprocess(data)
     embed = self.encoder(data)
+    # from pudb import set_trace; set_trace()
     post, prior = self.rssm.observe(
         embed, data['action'], data['is_first'], state)
+        
+    # for _ in range(self.ar_steps):
+      
+    #   prior = self.rssm.autoreg_observe(
+    #       embed, data['action'], data['is_first'], state, prior, self.ar_steps)
     
     if self.config.ema < 0:
       kl_loss, kl_value = self.rssm.kl_loss(post, prior, **self.config.kl) # in case the model does not have a target encoder

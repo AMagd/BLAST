@@ -46,7 +46,7 @@ defaults:
   # grad_heads: [decoder, reward, discount]
   grad_heads: [decoder, reward]
   pred_discount: True
-  rssm: {ensemble: 1, hidden: 1024, deter: 1024, stoch: 32, discrete: 32, act: elu, norm: none, obs_out_norm: none, std_act: sigmoid2, min_std: 0.1}
+  rssm: {ensemble: 1, hidden: 1024, deter: 1024, stoch: 32, discrete: 32, act: elu, norm: none, obs_out_norm: none, std_act: sigmoid2, min_std: 0.1, ar_steps: 0}
   encoder: {mlp_keys: '.*', cnn_keys: '.*', act: elu, norm: none, cnn_depth: 48, cnn_kernels: [4, 4, 4, 4], mlp_layers: [400, 400, 400, 400]}
   decoder: {mlp_keys: '.*', cnn_keys: '.*', act: elu, norm: none, cnn_depth: 48, cnn_kernels: [5, 5, 6, 6], mlp_layers: [400, 400, 400, 400]}
   reward_head: {layers: 4, units: 400, act: elu, norm: none, dist: mse}
@@ -189,22 +189,14 @@ minigrid:
 debug:
 
   jit: False
-  time_limit: 100
-  eval_every: 300
-  log_every: 300
-  prefill: 100
-  pretrain: 1
-  train_steps: 1
-  replay: {minlen: 10, maxlen: 30}
-  dataset: {batch: 10, length: 10}
-
-BLAST_full:
-  add_recon_loss: False
-  kl.balance: 1.0
-  encoder.norm: batchnorm
-  rssm.obs_out_norm: batchnorm
-  ema: 0.99
-  # rssm.ar_steps: ${rssm.stoch}
+  # time_limit: 100
+  # eval_every: 300
+  # log_every: 300
+  # prefill: 100
+  # pretrain: 1
+  # train_steps: 1
+  # replay: {minlen: 10, maxlen: 30}
+  # dataset: {batch: 10, length: 12}
 
 BLAST_recon:
   add_recon_loss: False
@@ -226,4 +218,9 @@ BLAST_BN:
   rssm.obs_out_norm: batchnorm
 
 BLAST_AR:
-  # rssm.ar_steps: 32
+  add_recon_loss: False
+  kl.balance: 1.0
+  ema: 0.99
+  encoder.norm: batchnorm
+  rssm.obs_out_norm: batchnorm
+  rssm.ar_steps: 3

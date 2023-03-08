@@ -7,13 +7,15 @@ from tensorflow_probability import distributions as tfd
 from tensorflow.keras.mixed_precision import experimental as prec
 
 import common
+import common.transformer
+import common.transformer_float16
 
 
 class EnsembleRSSM(common.Module):
 
   def __init__(
       self, ensemble=5, stoch=30, deter=200, hidden=200, discrete=False,
-      act='elu', norm='none', obs_out_norm='none', std_act='softplus', min_std=0.1):
+      act='elu', norm='none', obs_out_norm='none', std_act='softplus', min_std=0.1, ar_steps=0):
     super().__init__()
     self._ensemble = ensemble
     self._stoch = stoch
@@ -27,6 +29,41 @@ class EnsembleRSSM(common.Module):
     self._min_std = min_std
     self._cell = GRUCell(self._deter, norm=True)
     self._cast = lambda x: tf.cast(x, prec.global_policy().compute_dtype)
+    self.ar_steps = ar_steps
+    self.transformer = common.transformer.Transformer(num_layers=1,
+                                                      d_model=self._discrete,
+                                                      num_heads=1,
+                                                      dff=self._discrete*self._stoch,
+                                                      input_vocab_size=1000,
+                                                      target_vocab_size=1000,
+                                                      pe_input=self._deter,
+                                                      pe_target=self._discrete,
+                                                      rate=0)
+    self.transformer_decoder = common.transformer.Decoder(num_layers=1, d_model=self._discrete, num_heads=1,
+                         dff=self._discrete*self._stoch, target_vocab_size=320,
+                         maximum_position_encoding=self._discrete)
+    self.transformer_decoder_float16 = common.transformer_float16.Decoder(num_layers=1, d_model=self._discrete, num_heads=1,
+                         dff=self._discrete*self._stoch, target_vocab_size=320,
+                         maximum_position_encoding=self._discrete)
+    
+    
+    # num_layers = 4
+    # d_model = 128
+    # dff = 512
+    # num_heads = 8
+    # dropout_rate = 0
+    
+    # self.transformer = Transformer(
+    # num_layers=num_layers,
+    # d_model=d_model,
+    # num_heads=num_heads,
+    # dff=dff,
+    # input_vocab_size=self._discrete,
+    # target_vocab_size=self._discrete,
+    # pe_input=self._stoch,
+    # pe_target=self._stoch,
+    # rate=dropout_rate)
+    # self.autoreg = AutoRegressiveDecoderLayer(d_model=deter, num_heads=8, dff=2048, dropout_rate=0, loops = 5, prior_dim=stoch)
 
   def initial(self, batch_size):
     dtype = prec.global_policy().compute_dtype
@@ -45,7 +82,7 @@ class EnsembleRSSM(common.Module):
 
   @tf.function
   def observe(self, embed, action, is_first, state=None):
-    swap = lambda x: tf.transpose(x, [1, 0] + list(range(2, len(x.shape))))
+    swap = lambda x: tf.transpose(x, [1, 0] + list(range(2, len(x.shape)))) # Swapping index B (batch) with index L (length) - example: [B, L, W, H, C] -> [L, B, W, H, C]
     if state is None:
       state = self.initial(tf.shape(action)[0])
     post, prior = common.static_scan(
@@ -54,6 +91,47 @@ class EnsembleRSSM(common.Module):
     post = {k: swap(v) for k, v in post.items()}
     prior = {k: swap(v) for k, v in prior.items()}
     return post, prior
+  
+  # @tf.function
+  # def autoreg_observe(self, embed, action, is_first, prev_state=None, prev_prior=None, ar_steps=0):
+    
+  #   if prev_state is None:
+  #     prev_state = self.initial(tf.shape(action)[0])
+      
+  #   shape_state = prev_state['stoch'].shape[:-2] + [self._stoch * self._discrete]
+  #   shape_state = prev_state['stoch'].shape[:-2] + [self._stoch * self._discrete]
+  #   swap = lambda x: tf.transpose(x, [1, 0] + list(range(2, len(x.shape))))
+    
+  #   for _ in range(ar_steps):
+    
+  #     ################################################# Function(state_i, prior_i) -> state_i+1 #################################################
+      
+  #     for k, v_p in prev_prior.items:
+  #       prev_prior[k] = swap(prev_prior[k])
+        
+  #     for step_i in range(len(prev_prior['deter'])):
+  #       for ((k, v_s), (_, v_p)) in zip(prev_state.items(), prev_prior.items()):
+  #         if k == "deter":
+  #           new_state[k] = self.get(f'autoreg_state_{k}', tfkl.Dense, v_s.shape[-1])(v_s) + self.get(f'autoreg_prior_{k}', tfkl.Dense, v_s.shape[-1])(v_p)
+  #         else:
+  #           new_state[k] = self.get(f'autoreg_state_{k}', tfkl.Dense, shape[-1])(tf.reshape(v_s, shape)) + self.get(f'autoreg_prior_{k}', tfkl.Dense, shape[-1])(tf.reshape(v_p, shape))
+  #           new_state[k] = tf.reshape(new_state[k], v_s.shape)
+  #       ###########################################################################################################################################
+        
+        
+  #       ################################################# Function(state_i+1) -> prior_i+1 #########################################################
+  #       swap = lambda x: tf.transpose(x, [1, 0] + list(range(2, len(x.shape)))) # Swapping index B (batch) with index L (length) - example: [B, L, W, H, C] -> [L, B, W, H, C]
+  #       if new_state is None:
+  #         new_state = self.initial(tf.shape(action)[0])
+  #       prior = common.static_scan(
+  #           lambda prev, inputs: self.autoreg_obs_step(prev[0], *inputs),
+  #           (swap(action), swap(embed), swap(is_first)), (new_state, new_state))
+  #       prior = {k: swap(v) for k, v in prior.items()}
+        
+  #       prev_state = new_state
+  #       prev_prior = prior
+  #     ###########################################################################################################################################
+  #   return prior
 
   @tf.function
   def imagine(self, action, state=None):
@@ -64,6 +142,7 @@ class EnsembleRSSM(common.Module):
     action = swap(action)
     prior = common.static_scan(self.img_step, action, state)
     prior = {k: swap(v) for k, v in prior.items()}
+    # self.autoreg(prior, state)
     return prior
 
   def get_feat(self, state):
@@ -95,6 +174,7 @@ class EnsembleRSSM(common.Module):
             'b,b...->b...', 1.0 - is_first.astype(x.dtype), x),
         (prev_state, prev_action))
     prior = self.img_step(prev_state, prev_action, sample)
+
     x = tf.concat([prior['deter'], embed], -1)
     x = self.get('obs_out', tfkl.Dense, self._hidden)(x)
     x = self.get('obs_out_norm', NormLayer, self._obs_out_norm)(x)
@@ -103,8 +183,16 @@ class EnsembleRSSM(common.Module):
     dist = self.get_dist(stats)
     stoch = dist.sample() if sample else dist.mode()
     post = {'stoch': stoch, 'deter': prior['deter'], **stats}
+    
+    # Autoregressive Prior:
+    # for _ in range(self.ar_steps):
+    #   # z to h
+    #   x = self.get('obs_out', tfkl.Dense, self._hidden)(x)
+    #   x = self.get('obs_out_norm', NormLayer, self._obs_out_norm)(x)
+    #   x = self._act(x)
+    
     return post, prior
-
+  
   @tf.function
   def img_step(self, prev_state, prev_action, sample=True):
     prev_stoch = self._cast(prev_state['stoch'])
@@ -113,19 +201,69 @@ class EnsembleRSSM(common.Module):
       shape = prev_stoch.shape[:-2] + [self._stoch * self._discrete]
       prev_stoch = tf.reshape(prev_stoch, shape)
     x = tf.concat([prev_stoch, prev_action], -1)
-    x = self.get('img_in', tfkl.Dense, self._hidden)(x)
-    x = self.get('img_in_norm', NormLayer, self._norm)(x)
+    x = self.get(f'img_in', tfkl.Dense, self._hidden)(x)
+    x = self.get(f'img_in_norm', NormLayer, self._norm)(x)
     x = self._act(x)
     deter = prev_state['deter']
-    x, deter = self._cell(x, [deter])
-    deter = deter[0]  # Keras wraps the state in a list.
+    x, deter = self._cell(x, [deter]) # GRUCell takes an input as (inputs, states) and returns (h, new_state)
+    deter = deter[0]  # Keras wraps the state in a list
+    
+    # Auto-Regressive Prior Part
+    # h = [self.autoregGRU.get_initial_state(None, x.shape[0], x.dtype)]
+    # for _ in range(self.ar_steps):
+    #   x, h = self.autoregGRU(x, h)
+    
     stats = self._suff_stats_ensemble(x)
     index = tf.random.uniform((), 0, self._ensemble, tf.int32)
     stats = {k: v[index] for k, v in stats.items()}
-    dist = self.get_dist(stats)
-    stoch = dist.sample() if sample else dist.mode()
+    
+    # Reshape logits to feed to Dense laeyrs:
+    if self._discrete and self.ar_steps > 0:
+      # h = deter
+      # z = stats['logit']
+      # shape = stats['logit'].shape[:-2] + [self._stoch * self._discrete]
+      # z = tf.reshape(stats['logit'], shape)
+      # z = stats['logit']
+      # enc_padding_mask, combined_mask, dec_padding_mask = common.transformer.create_masks(h[:-1], stats['logit'][:-1])
+      transDecoder = self.transformer_decoder if deter.dtype == tf.float32 else self.transformer_decoder_float16
+      for _ in range(self.ar_steps):
+        d = self.get(f'transformer_in', tfkl.Dense, self._discrete*3)(deter)
+        stats['logit'], _ = transDecoder(stats['logit'], tf.reshape(d, [d.shape[0], 3, self._discrete]),
+                            True,
+                            None,
+                            None)
+      # stats['logit'], _ = self.transformer(deter, stats['logit'],
+      #                     True,
+      #                     None,
+      #                     None,
+      #                     None)
+      
+      # for _ in range(self.ar_steps): 
+      #   # h = self.get("autoreg_logit2deter", tfkl.Dense, self._deter, None)(z) + self.get('autoreg_deter2deter', tfkl.Dense, self._deter)(h)
+      #   h = self.get("autoreg_concat_logit_deter", tfkl.Dense, self._deter, None)(tf.concat([z, h, prev_action], -1))
+      #   h = self.get('autoreg_deter_norm', NormLayer, self._norm)(h)
+      #   h = self._act(h)
+        
+      #   z = self.get("autoreg_deter2logit", tfkl.Dense, self._stoch * self._discrete, None)(h)
+      #   z = self.get('autoreg_logit_norm', NormLayer, self._norm)(z)
+      #   z = self._act(z)
+      #   z = self.get('autoreg_deter2logit2', tfkl.Dense, self._stoch * self._discrete, None)(z)
+      
+      # Reshape logits back
+      # stats['logit'] = tf.reshape(z, z.shape[:-1] + [self._stoch, self._discrete])  
+      dist = self.get_dist(stats)
+      stoch = dist.sample() if sample else dist.mode()
+    else:
+      dist = self.get_dist(stats)
+      stoch = dist.sample() if sample else dist.mode()
     prior = {'stoch': stoch, 'deter': deter, **stats}
     return prior
+    
+    # Auto-Regressive Prior Part
+    # h = [self.autoregGRU.get_initial_state(None, x.shape[0], x.dtype)]
+    # for _ in range(self.ar_steps):
+    #   x, h = self.autoregGRU(x, h)    
+    
 
   def _suff_stats_ensemble(self, inp):
     bs = list(inp.shape[:-1])
@@ -486,8 +624,8 @@ def get_act(name):
 #     attn_output = self.mha(
 #         query=x,
 #         value=x,
-#         key=x,
-#         use_causal_mask = True)
+#         key=x
+#         )
 #     x = self.add([x, attn_output])
 #     x = self.layernorm(x)
 #     return x
@@ -530,7 +668,9 @@ def get_act(name):
 #                d_model,
 #                num_heads,
 #                dff,
-#                dropout_rate=0.1):
+#                dropout_rate=0.1,
+#                loops = 5,
+#                prior_dim=30):
 #     super(AutoRegressiveDecoderLayer, self).__init__()
 
 #     self.causal_self_attention = CausalSelfAttention(
@@ -544,12 +684,26 @@ def get_act(name):
 #         dropout=dropout_rate)
 
 #     self.ffn = FeedForward(d_model, dff)
+    
+#     self.prior2h = tf.keras.layers.Dense(d_model)
+#     self.h2prior = tf.keras.layers.Dense(prior_dim)
+#     self.flatten = tfkl.Flatten()
+    
+#     self.loops = loops
 
-#     tf.keras.layers.Dense(2)
+#   def call(self, prior, state):
+#     h_prev = state['deter']
+    
+#     for _ in range(self.loops):
+#       prior_flattened = self.flatten(prior['stoch'])
+#       h = self.prior2h(prior_flattened)
+#       h = self.causal_self_attention(x=h)
+#       print(f'{"PRINTED TEXT":.^100}')
+#       print(h.shape)
+#       print(h_prev.shape)
+#       print(f'{"END PRINTED TEXT":.^100}')
+#       h = self.cross_attention(x=h, context=h_prev)
 
-#   def call(self, x, context):
-#     x1 = self.causal_self_attention(x=x)
-#     x = self.cross_attention(x=x, context=context)
-
-#     x = self.ffn(x)  # Shape `(batch_size, seq_len, d_model)`.
-#     return x
+#       h_prev = self.ffn(h)
+#       prior['stoch'] = self.h2prior(h_prev)
+#     # return prior

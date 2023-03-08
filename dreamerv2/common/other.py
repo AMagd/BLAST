@@ -30,15 +30,37 @@ class RandomAgent:
     return output, None
 
 
-def static_scan(fn, inputs, start, reverse=False):
+def static_scan(fn, inputs, start, reverse=False): # static_scan(fn, inputs: (action, embed, is_first), start: (state, state), reverse=False)
   last = start
-  outputs = [[] for _ in tf.nest.flatten(start)]
-  indices = range(tf.nest.flatten(inputs)[0].shape[0])
+  outputs = [[] for _ in tf.nest.flatten(start)] # [[], [], [], [], [], []]
+  indices = range(tf.nest.flatten(inputs)[0].shape[0]) # returns range(0:L) -> 0:length of sequences
   if reverse:
     indices = reversed(indices)
   for index in indices:
-    inp = tf.nest.map_structure(lambda x: x[index], inputs)
-    last = fn(last, inp)
+    inp = tf.nest.map_structure(lambda x: x[index], inputs) # inp is (action, embed, is_first) for one sequence (index)
+    last = fn(last, inp) # last = (post, prior)
+    
+    # if ar_steps > 0:
+    #   autoreg_last = last[-1] if isinstance(last, tuple) else last # last will be (post, prior) or just prior during imagination
+    #   for _ in range(ar_steps):
+    #     autoreg_last = autoreg_fn(autoreg_last, inp[0] if isinstance(inp, tuple) else inp, autoreg="_autoreg") # autoreg_fn = img_step
+      
+    #   if isinstance(last, tuple):
+    #     last = (last[0], autoreg_last)
+    #     last[-1]['deter'] = last[0]['deter']
+    #   else:
+    #     for k, v in autoreg_last.items():
+    #       if k != 'deter':
+    #         last[k] = v
+      
+      # if isinstance(last, tuple):
+      #   last = (last[0], autoreg_last)
+      #   last[-1]['deter'] = last[0]['deter']
+      # else:
+      #   for k, v in autoreg_last.items():
+      #     if k != 'deter':
+      #       last[k] = v
+            
     [o.append(l) for o, l in zip(outputs, tf.nest.flatten(last))]
   if reverse:
     outputs = [list(reversed(x)) for x in outputs]
