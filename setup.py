@@ -13,8 +13,8 @@ setuptools.setup(
     package_data={'dreamerv2': ['configs.yaml']},
     entry_points={'console_scripts': ['dreamerv2=dreamerv2.train:main']},
     install_requires=[
-        'tensorflow==2.6.0', 'tensorflow_probability==0.14.1', 'ruamel.yaml', 'dm_control', 'pudb', 'gym-minigrid==1.0.2', 'sk-video', 
-        'gym==0.19.0', 'gym-minigrid==1.0.2', 'gym-notices==0.0.8', 'gymnasium==0.27.1', 'gymnasium-notices==0.0.1'],
+        'tensorflow==2.6.0', 'tensorflow_probability==0.14.1', 'ruamel.yaml', 'gym[atari]', 'dm_control', 'pudb', 'gym-minigrid==1.0.2', 'sk-video', 
+        'gym-minigrid==1.0.2', 'gym-notices==0.0.8', 'gymnasium==0.27.1', 'gymnasium-notices==0.0.1', 'numpy==1.23.5', 'matplotlib', 'protobuf==3.19.6', 'keras==2.6.0'],
     classifiers=[
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: MIT License',
@@ -23,3 +23,4 @@ setuptools.setup(
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 )
+
