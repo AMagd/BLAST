@@ -3,7 +3,7 @@ import pathlib
 
 
 setuptools.setup(
-    name='BLAST',
+    name='dreamerv2',
     version='2.2.0',
     description='Mastering Atari with Discrete World Models',
     url='http://github.com/danijar/dreamerv2',
