@@ -17,7 +17,7 @@ def main():
 
     # 1: normal minigrid env, 2: minigrid env with rewards 0 and 1, 3: minigrid env with rewards -1, 0 and 1
     config = dv2.defaults.update({
-        'logdir': f'~/logdir/minigrid/{model}/{env_type}/3',
+        'logdir': f'./logdir/minigrid/{model}/{env_type}/3',
         'prefill': 1e4,
         'train_every': 1,
         'steps': 5e4,
