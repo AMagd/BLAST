@@ -6,14 +6,23 @@ from common import natural_imgsource, envs
 from matplotlib import pyplot as plt
 import cv2
 import os
+import argparse
+import sys
 
 def main():
-    ###################### PARAMETERS TO CHANGE ######################
-    model= 'SG' # [DreamerV2, recon, SG, EMA, BN, AR, BLAST]
-    env_type = "smaller_agent" # [unmodified, video, random_frames, smaller_agent, color_direction]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', default='DreamerV2', type=str, help='Model to use')  
+    parser.add_argument('--env_type', default='smaller_agent', type=str, help='Environment type')
+    args, unknown = parser.parse_known_args()  # This will not cause an error on unrecognized arguments
+
+    model = args.model
+    env_type = args.env_type
+
+    # Update sys.argv to only include unrecognized arguments
+    sys.argv = [sys.argv[0]] + unknown
+
     print(f'{" Model = " + model + " " :#^100}')
     print(f'{" ENV = " + env_type + " " :#^100}')
-    ##################################################################
 
     # 1: normal minigrid env, 2: minigrid env with rewards 0 and 1, 3: minigrid env with rewards -1, 0 and 1
     config = dv2.defaults.update({
